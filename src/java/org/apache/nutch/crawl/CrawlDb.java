@@ -64,6 +64,7 @@ public class CrawlDb extends Configured implements Tool {
   }
   
   public void update(Path crawlDb, Path[] segments, boolean normalize, boolean filter, boolean additionsAllowed, boolean force) throws IOException {
+try {
     FileSystem fs = FileSystem.get(getConf());
     Path lock = new Path(crawlDb, LOCK_NAME);
     LockUtil.createLockFile(fs, lock, force);
@@ -113,6 +114,9 @@ public class CrawlDb extends Configured implements Tool {
     CrawlDb.install(job, crawlDb);
     long end = System.currentTimeMillis();
     LOG.info("CrawlDb update: finished at " + sdf.format(end) + ", elapsed: " + TimingUtil.elapsedTime(start, end));
+} catch (Exception ex) {
+            LOG.error("CrawlDb update error: " + ex.toString(), ex);
+        }
   }
 
   public static JobConf createJob(Configuration config, Path crawlDb)

@@ -174,7 +174,20 @@ public class LinkDb extends Configured implements Tool, Mapper<Text, ParseData, 
       if (LOG.isInfoEnabled()) {
         LOG.info("LinkDb: adding segment: " + segments[i]);
       }
-      FileInputFormat.addInputPath(job, new Path(segments[i], ParseData.DIR_NAME));
+            try {
+                Path segmentPath = new Path(segments[i], ParseData.DIR_NAME);
+                FileStatus[] files = fs.listStatus(segments[i], HadoopFSUtil.getPassDirectoriesFilter(fs));
+                if (files.length != 6) {
+                    fs.delete(segments[i], true);
+                } else {
+                    FileInputFormat.addInputPath(job, segmentPath);
+                }
+            } catch (FileNotFoundException fex) {
+                try {
+                    fs.delete(segments[i], true);
+                } catch (Exception ex) {
+                }
+            }
     }
     try {
       JobClient.runJob(job);

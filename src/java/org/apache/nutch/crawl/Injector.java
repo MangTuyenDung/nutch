@@ -249,6 +249,7 @@ public class Injector extends Configured implements Tool {
   }
   
   public void inject(Path crawlDb, Path urlDir) throws IOException {
+try {
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     long start = System.currentTimeMillis();
     if (LOG.isInfoEnabled()) {
@@ -300,6 +301,9 @@ public class Injector extends Configured implements Tool {
 
     long end = System.currentTimeMillis();
     LOG.info("Injector: finished at " + sdf.format(end) + ", elapsed: " + TimingUtil.elapsedTime(start, end));
+        } catch (Exception ex) {
+            LOG.error("ReInjector run injector error: " + ex.toString(), ex);
+        }
   }
 
   public static void main(String[] args) throws Exception {

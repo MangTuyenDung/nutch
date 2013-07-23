@@ -67,6 +67,7 @@ public class Crawl extends Configured implements Tool {
     Path dir = new Path("crawl-" + getDate());
     int threads = getConf().getInt("fetcher.threads.fetch", 10);
     int depth = 5;
+    int loop = 1;
     long topN = Long.MAX_VALUE;
     String solrUrl = null;
     
@@ -85,6 +86,9 @@ public class Crawl extends Configured implements Tool {
           i++;
       } else if ("-solr".equals(args[i])) {
         solrUrl = args[i + 1];
+        i++;
+      } else if ("-loop".equals(args[i])) {
+        loop = Integer.parseInt(args[i + 1]);
         i++;
       } else if (args[i] != null) {
         rootUrlDir = new Path(args[i]);
@@ -114,13 +118,11 @@ public class Crawl extends Configured implements Tool {
         LOG.info("topN = " + topN);
     }
     
+    Path inputDb = new Path(dir + "/inputdb");
     Path crawlDb = new Path(dir + "/crawldb");
     Path linkDb = new Path(dir + "/linkdb");
     Path segments = new Path(dir + "/segments");
-    Path indexes = new Path(dir + "/indexes");
-    Path index = new Path(dir + "/index");
 
-    Path tmpDir = job.getLocalPath("crawl"+Path.SEPARATOR+getDate());
     Injector injector = new Injector(getConf());
     Generator generator = new Generator(getConf());
     Fetcher fetcher = new Fetcher(getConf());
@@ -128,11 +130,26 @@ public class Crawl extends Configured implements Tool {
     CrawlDb crawlDbTool = new CrawlDb(getConf());
     LinkDb linkDbTool = new LinkDb(getConf());
       
+    Path[] segs = null;
+    for (int l = 0; l < loop; l++) {
+      //Xoa du lieu cu di
+      fs.delete(inputDb, true);
+      injector.inject(inputDb, rootUrlDir);
+      segs = generator.generate(inputDb, segments, -1, topN, System.currentTimeMillis());
+      if (segs != null) {
+         fetcher.fetch(segs[0], threads);  // fetch it
+         if (!Fetcher.isParsing(job)) {
+            parseSegment.parse(segs[0]);    // parse it, if needed
+         }
+         crawlDbTool.update(crawlDb, segs, true, true); // update crawldb
+      } else {
+         LOG.info("Stopping inject to inputDB - no more URLs to fetch.");
+      }
     // initialize crawlDb
-    injector.inject(crawlDb, rootUrlDir);
+    // injector.inject(crawlDb, rootUrlDir);
     int i;
     for (i = 0; i < depth; i++) {             // generate new segment
-      Path[] segs = generator.generate(crawlDb, segments, -1, topN, System
+      segs = generator.generate(crawlDb, segments, -1, topN, System
           .currentTimeMillis());
       if (segs == null) {
         LOG.info("Stopping at depth=" + i + " - no more URLs to fetch.");
@@ -145,7 +162,14 @@ public class Crawl extends Configured implements Tool {
       crawlDbTool.update(crawlDb, segs, true, true); // update crawldb
     }
     if (i > 0) {
-      linkDbTool.invert(linkDb, segments, true, true, false); // invert links
+      try {
+         linkDbTool.invert(linkDb, segments, true, true, false); // invert links
+      } catch (Exception ex) {
+         LOG.warn("Errors when invert links: " + ex.toString());
+      }
+    } else {
+      LOG.warn("No URLs to fetch - check your seed list and URL filters.");
+    }
 
       if (solrUrl != null) {
         // index, dedup & merge
@@ -159,10 +183,15 @@ public class Crawl extends Configured implements Tool {
         dedup.setConf(getConf());
         dedup.dedup(solrUrl);
       }
-      
-    } else {
-      LOG.warn("No URLs to fetch - check your seed list and URL filters.");
     }
+      //Delete segments temp
+      FileStatus[] files = fs.listStatus(segments, HadoopFSUtil.getPassDirectoriesFilter(fs));
+      Path[] sPaths = HadoopFSUtil.getPaths(files);
+      for (Path path : sPaths) {
+        try {
+           fs.delete(path, true);
+        } catch (Exception ex) {}
+      }
     if (LOG.isInfoEnabled()) { LOG.info("crawl finished: " + dir); }
     return 0;
   }

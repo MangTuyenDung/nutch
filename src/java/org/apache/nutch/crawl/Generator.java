@@ -487,7 +487,7 @@ public class Generator extends Configured implements Tool {
   public Path[] generate(Path dbDir, Path segments, int numLists, long topN,
       long curTime, boolean filter, boolean norm, boolean force, int maxNumSegments)
       throws IOException {
-
+try {
     Path tempDir = new Path(getConf().get("mapred.temp.dir", ".") + "/generate-temp-"
         + java.util.UUID.randomUUID().toString());
 
@@ -616,6 +616,10 @@ public class Generator extends Configured implements Tool {
 
     Path[] patharray = new Path[generatedSegments.size()];
     return generatedSegments.toArray(patharray);
+        } catch (Exception ex) {
+            LOG.error("Generator generate error: " + ex.toString(), ex);
+            return null;
+        }
   }
 
   private Path partitionSegment(FileSystem fs, Path segmentsDir, Path inputDir,

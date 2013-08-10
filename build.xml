@@ -188,6 +188,7 @@
       <packageset dir="${plugins.dir}/urlfilter-domainblacklist/src/java"/>
       <packageset dir="${plugins.dir}/urlfilter-prefix/src/java"/>
       <packageset dir="${plugins.dir}/urlfilter-regex/src/java"/>
+      <packageset dir="${plugins.dir}/urlfilter-regex-domain/src/java"/>
       <packageset dir="${plugins.dir}/urlfilter-prefix/src/java"/>
       <packageset dir="${plugins.dir}/urlfilter-suffix/src/java"/>
       <packageset dir="${plugins.dir}/urlfilter-validator/src/java"/>
@@ -578,6 +579,7 @@
       <packageset dir="${plugins.dir}/urlfilter-domainblacklist/src/java"/>
       <packageset dir="${plugins.dir}/urlfilter-prefix/src/java"/>
       <packageset dir="${plugins.dir}/urlfilter-regex/src/java"/>
+      <packageset dir="${plugins.dir}/urlfilter-regex-domain/src/java"/>
       <packageset dir="${plugins.dir}/urlfilter-suffix/src/java"/>
       <packageset dir="${plugins.dir}/urlfilter-validator/src/java"/>
       <packageset dir="${plugins.dir}/urlmeta/src/java"/>
@@ -973,6 +975,7 @@
         <source path="${basedir}/src/plugin/urlfilter-domain/src/test/" />
         <source path="${basedir}/src/plugin/urlfilter-prefix/src/java/" />
         <source path="${basedir}/src/plugin/urlfilter-regex/src/java/" />
+        <source path="${basedir}/src/plugin/urlfilter-regex-domain/src/java/" />
         <source path="${basedir}/src/plugin/urlfilter-regex/src/test/" />
         <source path="${basedir}/src/plugin/urlfilter-suffix/src/java/" />
         <source path="${basedir}/src/plugin/urlfilter-suffix/src/test/" />

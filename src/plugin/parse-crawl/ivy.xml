@@ -37,7 +37,6 @@
 
   <dependencies>
    <dependency org="org.ccil.cowan.tagsoup" name="tagsoup" rev="1.2.1"/>
-   <dependency org="org.xeustechnologies" name="jcl-core" rev="2.3"/>
   </dependencies>
 
 </ivy-module>

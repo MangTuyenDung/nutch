@@ -1,5 +1,6 @@
 package org.apache.nutch.parse.crawl;
 
+import domain.DomainParser;
 import org.xeustechnologies.jcl.JarClassLoader;
 import org.xeustechnologies.jcl.JclObjectFactory;
 import org.xeustechnologies.jcl.proxy.CglibProxyProvider;

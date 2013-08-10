@@ -16,6 +16,7 @@
  */
 package org.apache.nutch.parse.crawl;
 
+import domain.DomainParser;
 import java.util.Map;
 import java.net.URL;
 import java.net.MalformedURLException;
@@ -134,7 +135,7 @@ public class CrawlParser implements Parser {
             if (!domain.startsWith("www")) {
                 domain = "www" + domain;
             }
-            domainParser = classLoader.getClass(("domain." + domain).toUpperCase());
+            domainParser = classLoader.getClass("domain." + domain.toUpperCase());
             domainParser.setConf(getConf());
             domainParser.parse(content.getBaseUrl());
 
@@ -244,7 +245,10 @@ public class CrawlParser implements Parser {
                     LOG.debug(new StringBuilder().append("[").append(name).append(":").append(metadata.get(name).length() > 20 ? metadata.get(name).substring(0, 20) : metadata.get(name)).append("]").toString());
                 }
             }
-
+            
+            LOG.info("CrawlParser title " + title);
+            LOG.info("CrawlParser category " + domainParser.getJobCategory());
+            
             HttpClient client = new HttpClient();
             PostMethod method = new PostMethod(parseHtmlLink);
 
@@ -252,8 +256,8 @@ public class CrawlParser implements Parser {
             addPostParameter(method, domainParser.getTitle(), "title", true);
             addPostParameter(method, base.toString(), "url", false);
             addPostParameter(method, "1.0", "boost", false);
-            addPostParameter(method, domain, "domain", false);
-            if (text != null && text.length() > 160) {
+            addPostParameter(method, URLUtil.getDomainName(base), "domain", false);
+            if (text.length() > 160) {
                 addPostParameter(method, text.substring(0, 160), "content", true);
             } else {
                 addPostParameter(method, text, "content", true);
@@ -292,6 +296,8 @@ public class CrawlParser implements Parser {
             if (returnCode != 200) {
                 toFile("logs-post/" + System.currentTimeMillis() + "-error.html", data);
                 toFile("logs-post/" + System.currentTimeMillis() + "-post-error.html", Arrays.toString(method.getParameters()).getBytes());
+            } else {
+                toFile("logs-post/" + System.currentTimeMillis() + ".html", data);
             }
             LOG.info("Status " + returnCode + " post data " + base);
         } catch (Exception ex) {

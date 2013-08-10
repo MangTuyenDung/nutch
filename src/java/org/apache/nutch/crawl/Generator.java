@@ -487,139 +487,147 @@ public class Generator extends Configured implements Tool {
   public Path[] generate(Path dbDir, Path segments, int numLists, long topN,
       long curTime, boolean filter, boolean norm, boolean force, int maxNumSegments)
       throws IOException {
-try {
     Path tempDir = new Path(getConf().get("mapred.temp.dir", ".") + "/generate-temp-"
         + java.util.UUID.randomUUID().toString());
 
     Path lock = new Path(dbDir, CrawlDb.LOCK_NAME);
     FileSystem fs = FileSystem.get(getConf());
-    LockUtil.createLockFile(fs, lock, force);
-
-    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    long start = System.currentTimeMillis();
-    LOG.info("Generator: starting at " + sdf.format(start));
-    LOG.info("Generator: Selecting best-scoring urls due for fetch.");
-    LOG.info("Generator: filtering: " + filter);
-    LOG.info("Generator: normalizing: " + norm);
-    if (topN != Long.MAX_VALUE) {
-      LOG.info("Generator: topN: " + topN);
-    }
-    
-    if ("true".equals(getConf().get(GENERATE_MAX_PER_HOST_BY_IP))){
-      LOG.info("Generator: GENERATE_MAX_PER_HOST_BY_IP will be ignored, use partition.url.mode instead");
-    }
-
-    // map to inverted subset due for fetch, sort by score
-    JobConf job = new NutchJob(getConf());
-    job.setJobName("generate: select from " + dbDir);
-
-    if (numLists == -1) { // for politeness make
-      numLists = job.getNumMapTasks(); // a partition per fetch task
-    }
-    if ("local".equals(job.get("mapred.job.tracker")) && numLists != 1) {
-      // override
-      LOG.info("Generator: jobtracker is 'local', generating exactly one partition.");
-      numLists = 1;
-    }
-    job.setLong(GENERATOR_CUR_TIME, curTime);
-    // record real generation time
-    long generateTime = System.currentTimeMillis();
-    job.setLong(Nutch.GENERATE_TIME_KEY, generateTime);
-    job.setLong(GENERATOR_TOP_N, topN);
-    job.setBoolean(GENERATOR_FILTER, filter);
-    job.setBoolean(GENERATOR_NORMALISE, norm);
-    job.setInt(GENERATOR_MAX_NUM_SEGMENTS, maxNumSegments);
-
-    FileInputFormat.addInputPath(job, new Path(dbDir, CrawlDb.CURRENT_NAME));
-    job.setInputFormat(SequenceFileInputFormat.class);
-
-    job.setMapperClass(Selector.class);
-    job.setPartitionerClass(Selector.class);
-    job.setReducerClass(Selector.class);
-
-    FileOutputFormat.setOutputPath(job, tempDir);
-    job.setOutputFormat(SequenceFileOutputFormat.class);
-    job.setOutputKeyClass(FloatWritable.class);
-    job.setOutputKeyComparatorClass(DecreasingFloatComparator.class);
-    job.setOutputValueClass(SelectorEntry.class);
-    job.setOutputFormat(GeneratorOutputFormat.class);
-
     try {
-      JobClient.runJob(job);
-    } catch (IOException e) {
-      throw e;
+       try {
+           LockUtil.createLockFile(fs, lock, force);
+       } catch (Exception ex){
+           
+       }
+
+       SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+       long start = System.currentTimeMillis();
+       LOG.info("Generator: starting at " + sdf.format(start));
+       LOG.info("Generator: Selecting best-scoring urls due for fetch.");
+       LOG.info("Generator: filtering: " + filter);
+       LOG.info("Generator: normalizing: " + norm);
+       if (topN != Long.MAX_VALUE) {
+         LOG.info("Generator: topN: " + topN);
+       }
+
+       if ("true".equals(getConf().get(GENERATE_MAX_PER_HOST_BY_IP))){
+         LOG.info("Generator: GENERATE_MAX_PER_HOST_BY_IP will be ignored, use partition.url.mode instead");
+       }
+
+       // map to inverted subset due for fetch, sort by score
+       JobConf job = new NutchJob(getConf());
+       job.setJobName("generate: select from " + dbDir);
+
+       if (numLists == -1) { // for politeness make
+         numLists = job.getNumMapTasks(); // a partition per fetch task
+       }
+       if ("local".equals(job.get("mapred.job.tracker")) && numLists != 1) {
+         // override
+         LOG.info("Generator: jobtracker is 'local', generating exactly one partition.");
+         numLists = 1;
+       }
+       job.setLong(GENERATOR_CUR_TIME, curTime);
+       // record real generation time
+       long generateTime = System.currentTimeMillis();
+       job.setLong(Nutch.GENERATE_TIME_KEY, generateTime);
+       job.setLong(GENERATOR_TOP_N, topN);
+       job.setBoolean(GENERATOR_FILTER, filter);
+       job.setBoolean(GENERATOR_NORMALISE, norm);
+       job.setInt(GENERATOR_MAX_NUM_SEGMENTS, maxNumSegments);
+
+       FileInputFormat.addInputPath(job, new Path(dbDir, CrawlDb.CURRENT_NAME));
+       job.setInputFormat(SequenceFileInputFormat.class);
+
+       job.setMapperClass(Selector.class);
+       job.setPartitionerClass(Selector.class);
+       job.setReducerClass(Selector.class);
+
+       FileOutputFormat.setOutputPath(job, tempDir);
+       job.setOutputFormat(SequenceFileOutputFormat.class);
+       job.setOutputKeyClass(FloatWritable.class);
+       job.setOutputKeyComparatorClass(DecreasingFloatComparator.class);
+       job.setOutputValueClass(SelectorEntry.class);
+       job.setOutputFormat(GeneratorOutputFormat.class);
+
+       try {
+         JobClient.runJob(job);
+       } catch (IOException e) {
+         throw e;
+       }
+
+       // read the subdirectories generated in the temp
+       // output and turn them into segments
+       List<Path> generatedSegments = new ArrayList<Path>();
+
+       FileStatus[] status = fs.listStatus(tempDir);
+       try {
+         for (FileStatus stat : status) {
+           Path subfetchlist = stat.getPath();
+           if (!subfetchlist.getName().startsWith("fetchlist-")) continue;
+           // start a new partition job for this segment
+           Path newSeg = partitionSegment(fs, segments, subfetchlist, numLists);
+           generatedSegments.add(newSeg);
+         }
+       } catch (Exception e) {
+         LOG.warn("Generator: exception while partitioning segments, exiting ...");
+         fs.delete(tempDir, true);
+         return null;
+       }
+
+       if (generatedSegments.size() == 0) {
+         LOG.warn("Generator: 0 records selected for fetching, exiting ...");
+         LockUtil.removeLockFile(fs, lock);
+         fs.delete(tempDir, true);
+         return null;
+       }
+
+       if (getConf().getBoolean(GENERATE_UPDATE_CRAWLDB, false)) {
+         // update the db from tempDir
+         Path tempDir2 = new Path(getConf().get("mapred.temp.dir", ".") + "/generate-temp-"
+             + java.util.UUID.randomUUID().toString());
+
+         job = new NutchJob(getConf());
+         job.setJobName("generate: updatedb " + dbDir);
+         job.setLong(Nutch.GENERATE_TIME_KEY, generateTime);
+         for (Path segmpaths : generatedSegments) {
+           Path subGenDir = new Path(segmpaths, CrawlDatum.GENERATE_DIR_NAME);
+           FileInputFormat.addInputPath(job, subGenDir);
+         }
+         FileInputFormat.addInputPath(job, new Path(dbDir, CrawlDb.CURRENT_NAME));
+         job.setInputFormat(SequenceFileInputFormat.class);
+         job.setMapperClass(CrawlDbUpdater.class);
+         job.setReducerClass(CrawlDbUpdater.class);
+         job.setOutputFormat(MapFileOutputFormat.class);
+         job.setOutputKeyClass(Text.class);
+         job.setOutputValueClass(CrawlDatum.class);
+         FileOutputFormat.setOutputPath(job, tempDir2);
+         try {
+           JobClient.runJob(job);
+           CrawlDb.install(job, dbDir);
+         } catch (IOException e) {
+           LockUtil.removeLockFile(fs, lock);
+           fs.delete(tempDir, true);
+           fs.delete(tempDir2, true);
+           throw e;
+         }
+         fs.delete(tempDir2, true);
+       }
+
+       LockUtil.removeLockFile(fs, lock);
+       fs.delete(tempDir, true);
+
+       long end = System.currentTimeMillis();
+       LOG.info("Generator: finished at " + sdf.format(end) + ", elapsed: " + TimingUtil.elapsedTime(start, end));
+
+       Path[] patharray = new Path[generatedSegments.size()];
+       return generatedSegments.toArray(patharray);
+    } catch (Exception ex) {
+        LOG.error("Generator generate error: " + ex.toString(), ex);
+        try {
+            LockUtil.removeLockFile(fs, lock);
+            fs.delete(tempDir, true);
+        } catch (Exception fex){}
+        return null;
     }
-
-    // read the subdirectories generated in the temp
-    // output and turn them into segments
-    List<Path> generatedSegments = new ArrayList<Path>();
-
-    FileStatus[] status = fs.listStatus(tempDir);
-    try {
-      for (FileStatus stat : status) {
-        Path subfetchlist = stat.getPath();
-        if (!subfetchlist.getName().startsWith("fetchlist-")) continue;
-        // start a new partition job for this segment
-        Path newSeg = partitionSegment(fs, segments, subfetchlist, numLists);
-        generatedSegments.add(newSeg);
-      }
-    } catch (Exception e) {
-      LOG.warn("Generator: exception while partitioning segments, exiting ...");
-      fs.delete(tempDir, true);
-      return null;
-    }
-
-    if (generatedSegments.size() == 0) {
-      LOG.warn("Generator: 0 records selected for fetching, exiting ...");
-      LockUtil.removeLockFile(fs, lock);
-      fs.delete(tempDir, true);
-      return null;
-    }
-
-    if (getConf().getBoolean(GENERATE_UPDATE_CRAWLDB, false)) {
-      // update the db from tempDir
-      Path tempDir2 = new Path(getConf().get("mapred.temp.dir", ".") + "/generate-temp-"
-          + java.util.UUID.randomUUID().toString());
-
-      job = new NutchJob(getConf());
-      job.setJobName("generate: updatedb " + dbDir);
-      job.setLong(Nutch.GENERATE_TIME_KEY, generateTime);
-      for (Path segmpaths : generatedSegments) {
-        Path subGenDir = new Path(segmpaths, CrawlDatum.GENERATE_DIR_NAME);
-        FileInputFormat.addInputPath(job, subGenDir);
-      }
-      FileInputFormat.addInputPath(job, new Path(dbDir, CrawlDb.CURRENT_NAME));
-      job.setInputFormat(SequenceFileInputFormat.class);
-      job.setMapperClass(CrawlDbUpdater.class);
-      job.setReducerClass(CrawlDbUpdater.class);
-      job.setOutputFormat(MapFileOutputFormat.class);
-      job.setOutputKeyClass(Text.class);
-      job.setOutputValueClass(CrawlDatum.class);
-      FileOutputFormat.setOutputPath(job, tempDir2);
-      try {
-        JobClient.runJob(job);
-        CrawlDb.install(job, dbDir);
-      } catch (IOException e) {
-        LockUtil.removeLockFile(fs, lock);
-        fs.delete(tempDir, true);
-        fs.delete(tempDir2, true);
-        throw e;
-      }
-      fs.delete(tempDir2, true);
-    }
-
-    LockUtil.removeLockFile(fs, lock);
-    fs.delete(tempDir, true);
-
-    long end = System.currentTimeMillis();
-    LOG.info("Generator: finished at " + sdf.format(end) + ", elapsed: " + TimingUtil.elapsedTime(start, end));
-
-    Path[] patharray = new Path[generatedSegments.size()];
-    return generatedSegments.toArray(patharray);
-        } catch (Exception ex) {
-            LOG.error("Generator generate error: " + ex.toString(), ex);
-            return null;
-        }
   }
 
   private Path partitionSegment(FileSystem fs, Path segmentsDir, Path inputDir,

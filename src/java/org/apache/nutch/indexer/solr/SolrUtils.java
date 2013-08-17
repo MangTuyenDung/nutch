@@ -16,24 +16,24 @@
  */
 package org.apache.nutch.indexer.solr;
 
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.auth.AuthScope;
-import org.apache.commons.httpclient.UsernamePasswordCredentials;
-import org.apache.commons.httpclient.params.HttpClientParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
 
 import java.net.MalformedURLException;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.impl.HttpSolrServer;
 
 public class SolrUtils {
 
   public static Logger LOG = LoggerFactory.getLogger(SolrUtils.class);
 
-  public static CommonsHttpSolrServer getCommonsHttpSolrServer(JobConf job) throws MalformedURLException {
-    HttpClient client=new HttpClient();
-
+  public static SolrServer getCommonsHttpSolrServer(JobConf job) throws MalformedURLException {
+    DefaultHttpClient client = new DefaultHttpClient();
+    
     // Check for username/password
     if (job.getBoolean(SolrConstants.USE_AUTH, false)) {
       String username = job.get(SolrConstants.USERNAME);
@@ -42,15 +42,12 @@ public class SolrUtils {
 
       AuthScope scope = new AuthScope(AuthScope.ANY_HOST, AuthScope.ANY_PORT, AuthScope.ANY_REALM, AuthScope.ANY_SCHEME);
 
-      client.getState().setCredentials(scope, new UsernamePasswordCredentials(username, job.get(SolrConstants.PASSWORD)));
-
-      HttpClientParams params = client.getParams();
-      params.setAuthenticationPreemptive(true);
-
-      client.setParams(params);
+      client.getCredentialsProvider().setCredentials(
+                        scope,
+                        new UsernamePasswordCredentials(username, job.get(SolrConstants.PASSWORD)));
     }
 
-    return new CommonsHttpSolrServer(job.get(SolrConstants.SERVER_URL), client);
+    return new HttpSolrServer(job.get(SolrConstants.SERVER_URL), client);
   }
 
   public static String stripNonCharCodepoints(String input) {

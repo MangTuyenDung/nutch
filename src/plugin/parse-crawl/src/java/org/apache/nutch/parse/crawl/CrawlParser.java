@@ -147,6 +147,9 @@ public class CrawlParser implements Parser {
                 LOG.warn(new StringBuilder().append("CrawlParser: Empty content from ").append(content.getBaseUrl()).toString());
             }
 
+	    if (!domainParser.getJobOverview().isEmpty()) {
+                metadata.set("jobOverview", domainParser.getJobOverview()); 
+
             if (!domainParser.getCompanyName().isEmpty()) {
                 metadata.set("companyName", domainParser.getCompanyName());
             }
@@ -189,10 +192,6 @@ public class CrawlParser implements Parser {
 
             if (!domainParser.getJobSex().isEmpty()) {
                 metadata.set("jobSex", domainParser.getJobSex());
-            }
-
-            if (!domainParser.getJobOverview().isEmpty()) {
-                metadata.set("jobOverview", domainParser.getJobOverview());
             }
 
             if (!domainParser.getJobEducationLevel().isEmpty()) {
@@ -296,10 +295,9 @@ public class CrawlParser implements Parser {
             if (returnCode != 200) {
                 toFile("logs-post/" + System.currentTimeMillis() + "-error.html", data);
                 toFile("logs-post/" + System.currentTimeMillis() + "-post-error.html", Arrays.toString(method.getParameters()).getBytes());
-            } else {
-                toFile("logs-post/" + System.currentTimeMillis() + ".html", data);
             }
             LOG.info("Status " + returnCode + " post data " + base);
+	    }
         } catch (Exception ex) {
             LOG.error("CrawlParser: ", ex);
             return new ParseStatus(ex).getEmptyParseResult(content.getUrl(), getConf());
